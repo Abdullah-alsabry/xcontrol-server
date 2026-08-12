@@ -12,7 +12,7 @@
   audio{width:100%} a{color:#58a6ff} .badge{background:#30363d;border-radius:10px;padding:2px 8px;font-size:12px}
   .off{color:#f85149} .on{color:#3fb950} pre{white-space:pre-wrap;background:#0d1117;padding:8px;border-radius:6px}
 </style></head><body>
-<h1>🎛 XControl — لوحة التحكم</h1>
+<h1>🎛 XControl Abdullah alsabry —  لوحة التحكم الصبري</h1>
 <div id="tokenBox" class="card">
   <b>رمز السيرفر (TOKEN):</b><br>
   <div class="row"><input id="tok" placeholder="أدخل TOKEN"><button onclick="setTok()">حفظ</button></div>
@@ -114,7 +114,7 @@ function run(cmd, args, cb){
         if (hit) { clearInterval(iv); render(hit); if(cb) cb(hit); }
       }).catch(()=>{});
     }, 1200);
-    setTimeout(()=>clearInterval(iv), 90000);
+    setTimeout(()=>clearInterval(iv), 300000);
   });
 }
 function render(h){
