@@ -3,14 +3,15 @@ const http = require('http'), fs = require('fs'), path = require('path'), crypto
 
 const PORT  = process.env.PORT || 8080;
 const TOKEN = process.env.TOKEN || 'change-me';
-const MAX_DATA = 60 * 1024 * 1024;           // حد حجم الطلب: 60MB
-const RESULT_TTL = 3600000;                  // النتائج تبقى ساعة واحدة
-const DEVICE_TTL = 300000;                   // الجهاز يعتبر متصلًا خلال 5 دقائق
-const DISK_THRESHOLD = 3000000;              // النتائج الأكبر من ~2.2MB تُحفظ على القرص بدل الذاكرة
+const MAX_DATA = 60 * 1024 * 1024;
+const RESULT_TTL = 3600000;
+const DEVICE_TTL = 300000;
+const DISK_THRESHOLD = 3000000;
+const SESSION_TTL = 24 * 3600000;
 
 const devices = new Map(), queues = new Map(), results = new Map(), waiters = new Map();
+const sessions = new Map(); // sid -> timestamp
 
-// دليل مؤقت للملفات الكبيرة (يمنع امتلاء ذاكرة Render)
 function diskDir() {
   const d = path.join(os.tmpdir(), 'xcontrol');
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
@@ -27,6 +28,7 @@ setInterval(() => {
       if (r.onDisk) try { fs.unlinkSync(resultFile(k)); } catch (e) {}
     }
   }
+  for (const [sid, t] of sessions) if (now - t > SESSION_TTL) sessions.delete(sid);
 }, 60000);
 
 function send(res, code, obj) {
@@ -34,13 +36,21 @@ function send(res, code, obj) {
   res.writeHead(code, {'Content-Type': 'application/json; charset=utf-8', 'Access-Control-Allow-Origin': '*'});
   res.end(body);
 }
+
+function getSid(req) {
+  const c = req.headers.cookie || '';
+  const m = c.match(/sid=([^;]+)/);
+  return m ? m[1] : null;
+}
+
 function authed(req) {
   if (TOKEN === 'change-me') return true;
+  const sid = getSid(req);
+  if (sid && sessions.has(sid)) return true;
   const t = req.headers['x-token'] || new URL(req.url, 'http://x').searchParams.get('t');
   return t === TOKEN;
 }
 
-// نوع MIME حسب امتداد الملف — ضروري حتى تُعرض الصورة/الصوت/الفيديو داخل اللوحة
 function mimeFor(fname) {
   const ext = (fname || '').split('.').pop().toLowerCase();
   const m = {
@@ -57,7 +67,6 @@ const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
 
-  // CORS: السماح بطلبات من أي مصدر ولأي ترويسة (للأدوات الخارجية والمتصفح)
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -70,15 +79,38 @@ const server = http.createServer((req, res) => {
   let buf = [], total = 0, tooBig = false;
   req.on('data', c => { total += c.length; if (total <= MAX_DATA) buf.push(c); else tooBig = true; });
   req.on('end', () => {
-    // رفض الطلبات الأكبر من الحد برسالة واضحة بدل قصّ البيانات بصمت (سبب فشل الرفع القديم)
     if (tooBig) return send(res, 413, {error: 'request too large (max ' + Math.floor(MAX_DATA / 1048576) + 'MB)'});
 
     let j = null;
     try { const s = Buffer.concat(buf).toString('utf8'); j = s ? JSON.parse(s) : null; } catch (e) {}
     const now = Date.now();
 
+    // ====== تسجيل الدخول للوحة ======
+    if (p === '/api/login' && req.method === 'POST') {
+      const t = (j && j.t) || '';
+      if (t === TOKEN) {
+        const sid = crypto.randomBytes(16).toString('hex');
+        sessions.set(sid, now);
+        res.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Access-Control-Allow-Origin': '*',
+          'Set-Cookie': 'sid=' + sid + '; Path=/; HttpOnly; Max-Age=86400'
+        });
+        return res.end(JSON.stringify({ok: true}));
+      }
+      return send(res, 401, {error: 'wrong token'});
+    }
+    if (p === '/api/logout' && req.method === 'POST') {
+      const sid = getSid(req);
+      if (sid) sessions.delete(sid);
+      res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': 'sid=; Path=/; Max-Age=0'});
+      return res.end(JSON.stringify({ok: true}));
+    }
+
+    // ====== الصفحات: بدون جلسة → تسجيل دخول، بجلسة → اللوحة ======
     if (p === '/' || p === '/index.html') {
-      return fs.readFile(path.join(__dirname, 'public', 'index.html'), (e, data) => {
+      const page = authed(req) ? 'index.html' : 'login.html';
+      return fs.readFile(path.join(__dirname, 'public', page), (e, data) => {
         if (e) return send(res, 500, {error: 'panel missing'});
         res.writeHead(200, {'Content-Type': 'text/html; charset=utf-8'});
         res.end(data);
@@ -112,11 +144,10 @@ const server = http.createServer((req, res) => {
       const {id, cmdId, ok, data, fname} = j || {};
       if (!cmdId) return send(res, 400, {error: 'missing cmdId'});
       const r = {id, cmdId, ok: !!ok, data: data || null, fname: fname || null, t: now};
-      // الملفات الكبيرة تُحفظ على القرص مؤقتًا بدل الذاكرة — يحمي Render من الامتلاء عند رفع عدة ملفات كبيرة
       if (r.data && r.data.length > DISK_THRESHOLD) {
         try {
           fs.writeFileSync(resultFile(cmdId), r.data);
-          r.size = Math.round(r.data.length * 0.75); // الحجم الأصلي التقريبي
+          r.size = Math.round(r.data.length * 0.75);
           r.data = null; r.onDisk = true;
         } catch (e) { r.onDisk = false; }
       }
@@ -134,7 +165,6 @@ const server = http.createServer((req, res) => {
       if (!id || !devices.has(id)) return send(res, 404, {error: 'device offline'});
       const cmdId = crypto.randomUUID();
       queues.get(id).push({cmdId, cmd, args: args || {}, t: now});
-      // الإصلاح: إيقاظ poll المنتظر فورًا → يستلم الوكيل الأمر خلال أقل من ثانية
       const w = waiters.get(id);
       if (w) { clearTimeout(w.t); waiters.delete(id); send(w.res, 200, {}); }
       return send(res, 200, {ok: true, cmdId});
@@ -155,17 +185,13 @@ const server = http.createServer((req, res) => {
       const r = results.get(cmdId);
       if (!r || (r.data == null && !r.onDisk)) return send(res, 404, {error: 'expired'});
       let b;
-      try {
-        b = r.onDisk ? fs.readFileSync(resultFile(cmdId)) : Buffer.from(r.data, 'base64');
-      } catch (e) { return send(res, 500, {error: 'decode'}); }
+      try { b = r.onDisk ? fs.readFileSync(resultFile(cmdId)) : Buffer.from(r.data, 'base64'); }
+      catch (e) { return send(res, 500, {error: 'decode'}); }
       const fname = (r.fname || 'file').replace(/["\r\n]/g, '');
-      // dl=1 يُجبر المتصفح على التنزيل؛ وبدونه تُعرض الصور/الصوت/الفيديو داخل اللوحة مباشرة
       const force = u.searchParams.get('dl') === '1';
-      const disposition = (force || !/^(image|audio|video)\//.test(mimeFor(fname)))
-        ? 'attachment' : 'inline';
+      const disposition = (force || !/^(image|audio|video)\//.test(mimeFor(fname))) ? 'attachment' : 'inline';
       res.writeHead(200, {
-        'Content-Type': mimeFor(fname),
-        'Content-Length': b.length,
+        'Content-Type': mimeFor(fname), 'Content-Length': b.length,
         'Access-Control-Allow-Origin': '*',
         'Content-Disposition': disposition + '; filename="' + fname + '"'
       });
