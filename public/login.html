@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XControl-Alsabry</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; color: #0f0; font-family: 'Courier New', monospace; height: 100vh; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  #matrix { position: fixed; inset: 0; z-index: 0; }
+  .card { position: relative; z-index: 1; background: rgba(0, 10, 0, .85); border: 1px solid #0f0; border-radius: 10px; padding: 30px 40px; text-align: center; box-shadow: 0 0 30px rgba(0, 255, 0, .3); max-width: 420px; width: 90%; }
+  h1 { font-size: 26px; letter-spacing: 3px; text-shadow: 0 0 10px #0f0; margin-bottom: 6px; }
+  .sub { font-size: 12px; color: #4a4; margin-bottom: 22px; }
+  .term { background: #001200; border: 1px solid #0f0; border-radius: 6px; padding: 10px 14px; font-size: 13px; text-align: right; color: #0f0; margin-bottom: 16px; }
+  .cursor { animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  input { width: 100%; background: #001200; border: 1px solid #0f0; color: #0f0; font-family: monospace; font-size: 16px; padding: 12px; border-radius: 6px; outline: none; letter-spacing: 4px; text-align: center; margin-bottom: 14px; }
+  input::placeholder { color: #274; letter-spacing: 1px; }
+  button { width: 100%; background: #0f0; color: #000; border: none; font-family: monospace; font-size: 16px; font-weight: bold; padding: 12px; border-radius: 6px; cursor: pointer; letter-spacing: 2px; }
+  button:hover { background: #6f6; }
+  .err { color: #f44; font-size: 13px; margin-top: 12px; min-height: 18px; text-shadow: 0 0 6px #f00; }
+  .err.ok { color: #0f0; }
+  .shake { animation: shake .4s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+</style>
+</head>
+<body>
+<canvas id="matrix"></canvas>
+<div class="card" id="card">
+  <h1>XCONTROL<span style="color:#f80">-ALSABRY</span></h1>
+  <div class="sub">Secure Remote Access Terminal v2.7</div>
+  <div class="term">root@xcontrol:~$ <span id="typing"></span><span class="cursor">█</span></div>
+  <input type="password" id="key" placeholder="•••• أدخل رمز السرفر ••••" autocomplete="off">
+  <button id="go">⏎ دخول</button>
+  <div class="err" id="err"></div>
+</div>
+
+<script>
+const cv = document.getElementById('matrix'), cx = cv.getContext('2d');
+let W, cols, drops = [];
+function resize() {
+  W = cv.width = innerWidth; cv.height = innerHeight;
+  cols = Math.floor(W / 14);
+  drops = Array(cols).fill(0).map(() => Math.random() * -50);
+}
+resize(); addEventListener('resize', resize);
+const chars = '01アイウエオカキクケコサシスセソ01X0';
+setInterval(() => {
+  cx.fillStyle = 'rgba(0,0,0,.12)'; cx.fillRect(0, 0, W, cv.height);
+  cx.fillStyle = '#0f0'; cx.font = '14px monospace';
+  for (let i = 0; i < cols; i++) {
+    const ch = chars[Math.floor(Math.random() * chars.length)];
+    cx.fillText(ch, i * 14, drops[i] * 14);
+    if (drops[i] * 14 > cv.height && Math.random() > .975) drops[i] = 0;
+    drops[i]++;
+  }
+}, 50);
+
+const txt = 'XAgent 3.0 // Alsabry build -- waiting for key...';
+let ti = 0;
+setInterval(() => {
+  document.getElementById('typing').textContent = txt.slice(0, ti);
+  if (ti < txt.length) ti++;
+}, 45);
+
+const card = document.getElementById('card'), key = document.getElementById('key'), err = document.getElementById('err');
+async function login() {
+  err.textContent = '';
+  const v = key.value.trim();
+  if (!v) { err.textContent = '⚠ أدخل الرمز أولاً'; return; }
+  document.getElementById('go').textContent = '...جاري التحقق';
+  try {
+    const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: v }) });
+    const j = await r.json();
+    if (r.ok) { err.className = 'err ok'; err.textContent = '✅ تم التحقق — جارِ الدخول...'; setTimeout(() => location.href = '/', 700); }
+    else { err.className = 'err'; err.textContent = '❌ رمز خاطئ — رُفض الوصول'; card.classList.remove('shake'); void card.offsetWidth; card.classList.add('shake'); }
+  } catch (e) { err.textContent = '❌ فشل الاتصال بالسيرفر'; }
+  document.getElementById('go').textContent = '⏎ دخول';
+}
+document.getElementById('go').onclick = login;
+key.addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>
