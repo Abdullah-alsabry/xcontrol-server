@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XControl Panel</title>
+<title>XControl-Alsabry — لوحة التحكم</title>
 <style>
   * { box-sizing: border-box; }
   body { background: #0d1117; color: #e6edf3; font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 14px; }
@@ -23,6 +23,7 @@
   table { border-collapse: collapse; width: 100%; margin-top: 6px; font-size: 12px; }
   th, td { border: 1px solid #30363d; padding: 4px 6px; text-align: right; }
   th { background: #21262d; }
+  td button { padding: 4px 8px; font-size: 13px; margin: 1px; }
   pre { white-space: pre-wrap; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px; margin: 6px 0 0; }
   img, video { max-width: 280px; border-radius: 6px; margin-top: 6px; }
   audio { margin-top: 6px; width: 100%; }
@@ -31,18 +32,14 @@
 </head>
 <body>
 
-<h1>🎛 XControl Panel Alsabry- لوحة تحكم الصبري</h1>
-
-<div class="bar">
-  <input id="tok" placeholder="أدخل TOKEN هنا">
-  <button onclick="saveTok()">حفظ الرمز</button>
-  <button class="blue" onclick="loadDevices()">🔄 تحديث الأجهزة</button>
-</div>
+<h1>🎛 XControl-Alsabry — لوحة التحكم</h1>
 
 <div class="bar">
   <select id="dev" style="flex:1">
     <option value="">— اختر الجهاز —</option>
   </select>
+  <button class="blue" onclick="loadDevices()">🔄 تحديث الأجهزة</button>
+  <button class="red" onclick="logout()">🚪 خروج</button>
 </div>
 
 <div class="grid">
@@ -79,9 +76,8 @@
 <div id="out"></div>
 
 <script>
-let TOKEN = localStorage.getItem('tok') || new URLSearchParams(location.search).get('t') || '';
-document.getElementById('tok').value = TOKEN;
 const seen = {};
+let rowActs = [];
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -101,18 +97,13 @@ function log(msg) {
 }
 function pathVal() { return document.getElementById('path').value.trim(); }
 
-function saveTok() {
-  TOKEN = document.getElementById('tok').value.trim();
-  localStorage.setItem('tok', TOKEN);
-  log(TOKEN ? '✅ تم حفظ الرمز' : '⚠ أدخل الرمز أولاً');
-}
-
 async function api(path, body) {
   const r = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-token': TOKEN },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {})
   });
+  if (r.status === 401 || r.status === 403) { location.href = '/'; throw new Error('انتهت الجلسة'); }
   let j = {};
   try { j = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
@@ -124,7 +115,7 @@ async function loadDevices() {
   const prev = sel.value;
   sel.innerHTML = '<option value="">— اختر الجهاز —</option>';
   try {
-    const r = await fetch('/api/devices?t=' + encodeURIComponent(TOKEN));
+    const r = await fetch('/api/devices');
     const list = await r.json();
     if (!Array.isArray(list) || list.length === 0) {
       log('⚠ لا توجد أجهزة متصلة — تأكد أن التطبيق مفتوح على الهاتف');
@@ -146,7 +137,6 @@ async function loadDevices() {
 async function sendCmd(cmd, args) {
   const sel = document.getElementById('dev');
   if (!sel || !sel.value) { log('⚠ اختر جهازًا أولاً من القائمة'); return; }
-  if (!TOKEN) { log('⚠ أدخل TOKEN وحفظه أولاً'); return; }
   log('⏳ إرسال أمر: ' + cmd + ' ...');
   try {
     const j = await api('/api/exec', { id: sel.value, cmd, args: args || {} });
@@ -191,6 +181,18 @@ function pickUpload() {
   rd.readAsDataURL(f);
 }
 
+function rowAct(i, act) {
+  const o = rowActs[i];
+  if (!o) return;
+  if (o.type === 'media') {
+    if (act === 'd') sendCmd('download_media', { kind: o.kind, id: o.id, fname: o.fname });
+    else sendCmd('delete_media', { kind: o.kind, id: o.id });
+  } else {
+    if (act === 'd') sendCmd('get_file', { path: o.path });
+    else sendCmd('delete_file', { path: o.path });
+  }
+}
+
 function render(h) {
   let html = '<div class="card"><b>' + esc((h.cmdId || '').slice(0, 8)) + '</b> — ' +
     (h.ok ? '<span class="on">نجح</span>' : '<span class="off">فشل</span>') +
@@ -198,7 +200,7 @@ function render(h) {
     (h.size ? ' · ' + fmt(h.size) : '');
 
   if (h.file) {
-    const url = '/api/file/' + encodeURIComponent(h.cmdId) + '?t=' + encodeURIComponent(TOKEN);
+    const url = '/api/file/' + encodeURIComponent(h.cmdId);
     const ext = (h.fname || '').split('.').pop().toLowerCase();
     html += '<br><a href="' + url + '" download>⬇️ تنزيل الملف</a>';
     if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext))
@@ -211,9 +213,24 @@ function render(h) {
     try {
       const d = JSON.parse(h.data);
       if (Array.isArray(d) && d.length && typeof d[0] === 'object') {
-        html += '<table><tr>' + Object.keys(d[0]).map(k => '<th>' + esc(k) + '</th>').join('') + '</tr>';
-        d.slice(0, 500).forEach(o => {
-          html += '<tr>' + Object.values(o).map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>';
+        rowActs = [];
+        html += '<table><tr><th>#</th>' + Object.keys(d[0]).map(k => '<th>' + esc(k) + '</th>').join('') + '<th>إجراءات</th></tr>';
+        d.slice(0, 500).forEach((o, i) => {
+          html += '<tr><td>' + (i + 1) + '</td>';
+          Object.values(o).forEach(v => html += '<td>' + esc(v) + '</td>');
+          let btns = '';
+          if (o.kind && o.id) {
+            const idx = rowActs.length;
+            rowActs.push({ type: 'media', kind: o.kind, id: o.id, fname: o.name || o.id });
+            btns += '<button onclick="rowAct(' + idx + ',\'d\')">⬇️</button> ';
+            btns += '<button class="red" onclick="rowAct(' + idx + ',\'x\')">🗑</button>';
+          } else if (o.path) {
+            const idx = rowActs.length;
+            rowActs.push({ type: 'file', path: o.path });
+            btns += '<button onclick="rowAct(' + idx + ',\'d\')">⬇️</button> ';
+            btns += '<button class="red" onclick="rowAct(' + idx + ',\'x\')">🗑</button>';
+          }
+          html += '<td>' + btns + '</td></tr>';
         });
         html += '</table>';
       } else if (typeof d === 'object' && d !== null) {
@@ -233,7 +250,7 @@ function render(h) {
 
 async function pollResults() {
   const sel = document.getElementById('dev');
-  if (!sel || !sel.value || !TOKEN) return;
+  if (!sel || !sel.value) return;
   try {
     const j = await api('/api/results', { id: sel.value });
     if (Array.isArray(j)) {
@@ -244,7 +261,12 @@ async function pollResults() {
         }
       }
     }
-  } catch (e) { /* تجاهل أخطاء التحديث الدوري */ }
+  } catch (e) { /* تجاهل */ }
+}
+
+function logout() {
+  fetch('/api/logout', { method: 'POST' }).catch(() => {});
+  location.href = '/';
 }
 
 loadDevices();
