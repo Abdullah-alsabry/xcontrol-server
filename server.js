@@ -10,7 +10,7 @@ const DISK_THRESHOLD = 3000000;
 const SESSION_TTL = 24 * 3600000;
 
 const devices = new Map(), queues = new Map(), results = new Map(), waiters = new Map();
-const sessions = new Map(); // sid -> timestamp
+const sessions = new Map();
 
 function diskDir() {
   const d = path.join(os.tmpdir(), 'xcontrol');
@@ -63,6 +63,15 @@ function mimeFor(fname) {
   return m[ext] || 'application/octet-stream';
 }
 
+// مسح كل النتائج من الذاكرة والقرص
+function clearResults() {
+  for (const k of [...results.keys()]) {
+    const r = results.get(k);
+    if (r && r.onDisk) try { fs.unlinkSync(resultFile(k)); } catch (e) {}
+    results.delete(k);
+  }
+}
+
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   const p = u.pathname;
@@ -85,7 +94,6 @@ const server = http.createServer((req, res) => {
     try { const s = Buffer.concat(buf).toString('utf8'); j = s ? JSON.parse(s) : null; } catch (e) {}
     const now = Date.now();
 
-    // ====== تسجيل الدخول للوحة ======
     if (p === '/api/login' && req.method === 'POST') {
       const t = (j && j.t) || '';
       if (t === TOKEN) {
@@ -103,11 +111,15 @@ const server = http.createServer((req, res) => {
     if (p === '/api/logout' && req.method === 'POST') {
       const sid = getSid(req);
       if (sid) sessions.delete(sid);
+      clearResults(); // مسح سجل العمليات بالكامل عند الخروج
       res.writeHead(200, {'Content-Type': 'application/json; charset=utf-8', 'Set-Cookie': 'sid=; Path=/; Max-Age=0'});
       return res.end(JSON.stringify({ok: true}));
     }
+    if (p === '/api/clear' && req.method === 'POST') {
+      clearResults();
+      return send(res, 200, {ok: true});
+    }
 
-    // ====== الصفحات: بدون جلسة → تسجيل دخول، بجلسة → اللوحة ======
     if (p === '/' || p === '/index.html') {
       const page = authed(req) ? 'index.html' : 'login.html';
       return fs.readFile(path.join(__dirname, 'public', page), (e, data) => {
@@ -173,7 +185,8 @@ const server = http.createServer((req, res) => {
       const {id} = j || {};
       const list = [...results.values()].filter(r => r.id === id).sort((a, b) => a.t - b.t).slice(-60)
         .map(r => {
-          const big = (r.data && r.data.length > 700000) || !!r.onDisk;
+          // أي نتيجة لها fname = ملف → تُعرض برابط تنزيل (وليس كنص)
+          const big = !!r.fname || (r.data && r.data.length > 700000) || !!r.onDisk;
           return {cmdId: r.cmdId, ok: r.ok, fname: r.fname, file: big,
                   size: r.size || (r.data ? Math.round(r.data.length * 0.75) : 0),
                   data: big ? null : r.data, t: r.t};
