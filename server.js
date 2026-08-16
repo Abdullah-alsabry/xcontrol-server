@@ -1,4 +1,4 @@
-here#!/usr/bin/env node
+#!/usr/bin/env node
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto'), os = require('os');
 
 const PORT  = process.env.PORT || 8080;
